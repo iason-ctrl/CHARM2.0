@@ -53,3 +53,28 @@ def initial_data_plot_only_standard_diagram(x,y,x_natural):
 
 
     plt.show()
+
+
+def plot_histogramms(redshifts,moduli):
+    font = {'family': 'normal',
+            'weight': 'bold',
+            'size': 15}
+
+    matplotlib.rc('font', **font)
+
+    sns.set_style('darkgrid')  # darkgrid, white grid, dark, white and ticks
+    palette = sns.color_palette('deep')
+
+    plt.subplot(2,1,1)
+    plt.hist(redshifts,bins=1701,ec=palette[0],color=palette[0])
+    plt.xlabel("Redshift $z$")
+    plt.ylabel("Frequency")
+    plt.title("Histogram of redshift frequency in the data")
+
+    plt.subplot(2, 1,2)
+    plt.xlabel("Distance modulus $\mu$")
+    plt.ylabel("Frequency")
+    plt.hist(moduli,bins=1701,ec=palette[3],color=palette[3])
+    plt.title("Histogram of distance modulus frequency in the data")
+    plt.subplots_adjust(hspace=0.4)
+    plt.show()
