@@ -1,5 +1,5 @@
 import os
-
+import math
 import nifty8 as ift
 import numpy as np
 import matplotlib.pyplot as plt
@@ -97,3 +97,29 @@ class WeightedLOSResponse(ift.LOSResponse):
 
 def pow_spec(k):
     return np.nan_to_num((k)**(-4))
+
+
+class ExpLOSResponse(ift.LOSResponse):
+
+    def __init__(self, domain, starts, ends, sigmas=None):
+        super(ExpLOSResponse, self).__init__(domain, starts, ends, sigmas, truncation=3.)
+
+    def apply(self, x, mode):
+
+        self._check_input(x, mode)
+
+
+
+        input_data = x.val.reshape(-1)
+
+        ''' Step 3 : Perform integration. Perform adjoint matrix vector multiplication and reshape array if mode!=Self.times '''
+        if mode != self.TIMES:
+            result = self._smat.rmatvec(input_data).reshape(self.domain[0].shape)
+        else:
+            result = self._smat.matvec(input_data)
+
+
+        if mode != self.TIMES:
+            return ift.Field(self._domain, result.reshape(self.domain[0].shape))
+        else:
+            return ift.Field(self._target, result)
