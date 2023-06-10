@@ -106,8 +106,8 @@ def custom_plot(x,drawData,Reconstruction,reconstruct,cf_info):
     ax.yaxis.set_minor_locator(AutoMinorLocator())
 
     if drawData==True:
-        plt.plot(np.linspace(0,1,200),x, markersize=8, marker="o", color="black", markerfacecolor='white')
-        plt.plot(np.linspace(0,1,200),x, "-", color="black", linewidth=2)
+        plt.plot(np.linspace(0,1,400),x, markersize=8, marker="o", color="black", markerfacecolor='white')
+        plt.plot(np.linspace(0,1,400),x, "-", color="black", linewidth=2)
         plt.xlabel("signal space")
         plt.ylabel("data")
         plt.title("Data realization (mock)", size=16)
@@ -115,8 +115,8 @@ def custom_plot(x,drawData,Reconstruction,reconstruct,cf_info):
         fig.set_size_inches(16, 9)
         plt.savefig("/Users/iason/PycharmProjects/Nifty/CHARM/figures/" +f"{cf_info}_customDataRealization.png",dpi=300,bbox_inches='tight')
     elif Reconstruction==True:
-        plt.plot(np.linspace(0,1,200),reconstruct, "-.", color="blue", linewidth=4, label="Reconstruction")
-        plt.plot(np.linspace(0,1,200),x, "-", color="black", linewidth=2, label="Mock Signal")
+        plt.plot(np.linspace(0,1,400),reconstruct, "-.", color="blue", linewidth=4, label="Reconstruction")
+        plt.plot(np.linspace(0,1,400),x, "-", color="black", linewidth=2, label="Mock Signal")
         plt.xlabel("signal space")
         plt.ylabel("signal")
         plt.title("Mock signal and Reconstruction", size=16)

@@ -1,49 +1,52 @@
+import numpy as np
+
 from Plot_helpers import *
 from CustomOperators import *
 import os
 
 ift.random.push_sseq_from_seed(19)
 
-n_datapoints = 200
+n_datapoints = 400
 signal_space = ift.RGSpace(n_datapoints)
 data_space = ift.UnstructuredDomain((n_datapoints,))
 
 def radial_los(n_los):
     starts = [np.zeros(n_los)]
-    ends = list(ift.random.current_rng().random((n_los, 1)).T)
+    ends = [np.array(ift.random.current_rng().uniform(0.1, 2.5, n_los))]
     return starts, ends
 
 def random_mus(n_mus):
     return np.random.randint(100, size=n_mus)
 
-
-
 # ------- Parameters of the correlated field model ------- #
 
-alpha = 1 # AMPLITUDE OF FLUCTUATIONS / SPECTRAL ENERGY
-alpha_std = 1.4 # STANDARD DEVIATION FROM ALPHA VALUE
-k_exponent = -3 # SLOPE OF POWER SPECTRUM
-k_exponent_std = -1 # Let it wiggle a bit about . .
 
 # take the nomenclature from getting started 3 and such
 # Alpha is not the fluctuations level
-# fluctuations parameter doesnt really do anything because the sampled power spectra are not really bending in end_result.png !
-# redshift range should be included in my data
+# fluctuations parameter doesn't really do anything because the sampled power spectra are not really bending in end_result.png !
 
-# Where do the distance moduli come into play ?
 
-offset_mean = 2
-offset_std = (4, 0.8)
+
+'''
+I don't expect the field to fluctuate much in the y-direction if at all. Maybe noise. 
+- But overall, fluctations = (0.1, 1e-16)
+- There is no reason to offset the field realizations, so set offset mean and offset std to None.
+- I expect the slope to -4, I let it vary by maybe 1. loglogavgslope = (-4, 1)
+- I expect no deviation from diagonal power law behaviour, so I set asperity to None and then as a consequency flexibility to None
+'''
+
+
+# I'm not sure what loglog avg slope std = -2 does differently from +2
 
 args = {
     #"target_subdomain": signal_space,
     #"harmonic_partner": signal_space.get_default_codomain(),
-    "offset_mean" :     offset_mean,
-    "offset_std" :      offset_std,
-    "fluctuations":     (alpha,alpha_std),
-    "loglogavgslope":   (k_exponent,k_exponent_std),
-    "asperity":         (1,0.1),
-    "flexibility":      (0.1,0.005) # use this
+    "offset_mean" :     None,
+    "offset_std" :      None,
+    "fluctuations":     (0.1, 1e-16),
+    "loglogavgslope":   (-4,1),
+    "asperity":         None,
+    "flexibility":      None # use this
 }
 cf_info = str(list(args.values()))
 
@@ -53,15 +56,21 @@ signal_cf = ift.SimpleCorrelatedField(signal_space, **args)
 
 signal = signal_cf
 
-redshift_stars, redshift_ends =  radial_los(n_datapoints)
-redshift_weights = np.exp(np.random.random(40))
+redshift_starts, redshift_ends =  radial_los(n_datapoints)
+redshift_weights = (np.ones(n_datapoints)+redshift_ends)[0]
 
-print("Redshift starts and ends", redshift_stars, redshift_ends)
 
+d_h = 3e8/(68.6e3)*1e6
 noise = .001
 N = ift.ScalingOperator(data_space, noise, np.float64)
-R = ift.LOSResponse(signal_space, starts=redshift_stars, ends=redshift_ends)
-signal_response = ift.log(R(ift.exp(-1/2*signal)))
+HT = ift.HarmonicTransformOperator(signal_space.get_default_codomain(),signal_space)
+R = ift.LOSResponse(signal_space, starts=redshift_starts, ends=redshift_ends)
+REDSHIFTS_in = ift.DiagonalOperator(diagonal=ift.Field.from_raw(signal_space,redshift_weights))
+REDSHIFTS_out = ift.DiagonalOperator(diagonal=ift.Field.from_raw(data_space,redshift_weights))
+FIVES = ift.DiagonalOperator(diagonal=ift.Field.from_raw(data_space,5*np.ones(n_datapoints)))
+
+signal_response = 5*ift.log(d_h*REDSHIFTS_out(R(REDSHIFTS_in(ift.exp(-1/2*signal)))))
+print("SIgnal response", signal_response)
 #signal_response = integral(ift.exp(-1/2*signal))-ift.DiagonalOperator(ift.Field(domain=ift.DomainTuple.make(signal_space),val=10*np.ones(n_datapoints)))
 
 # Generate mock signal and data
@@ -124,14 +133,3 @@ custom_plot(R.adjoint_times(data_realization).val,True,False,reconstruct=[],cf_i
 custom_plot(signal(mock_position).val,False, True, reconstruct=mean.val,cf_info=cf_info)
 
 print("saved result as end_result.png")
-
-
-list_to_vary = np.linspace(0.1,4,9)
-clock = 0
-
-for loglogavgslope in list_to_vary:
-    clock += 1
-    main(loglogavgslope,hint="flexibility_mean",clock=clock)
-    os.system('say "Eine weitere Iteration fertig."')
-
-os.system('say "Script ist ausgeführt worden"')
