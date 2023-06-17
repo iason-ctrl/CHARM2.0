@@ -1,22 +1,26 @@
 import numpy as np
 
+# TODO NIFTY BUG : IFT.LOG(IFT.EXP()) = () WITH THE SAME DOMAIN
+
 from Plot_helpers import *
 from CustomOperators import *
 import os
 
 ift.random.push_sseq_from_seed(19)
 
-n_datapoints = 400
-signal_space = ift.RGSpace(n_datapoints)
+x_length = 7
+n_datapoints = 200
+n_pix = 400
+signal_space = ift.RGSpace(n_pix,distances=x_length/n_pix)
 data_space = ift.UnstructuredDomain((n_datapoints,))
+
+signal_data_space = ift.UnstructuredDomain((n_pix,))
 
 def radial_los(n_los):
     starts = [np.zeros(n_los)]
-    ends = [np.array(ift.random.current_rng().uniform(0.1, 2.5, n_los))]
+    ends = [np.array(abs(ift.random.current_rng().normal(0.05,0.4,n_los)))]
     return starts, ends
 
-def random_mus(n_mus):
-    return np.random.randint(100, size=n_mus)
 
 # ------- Parameters of the correlated field model ------- #
 
@@ -29,7 +33,7 @@ def random_mus(n_mus):
 
 '''
 I don't expect the field to fluctuate much in the y-direction if at all. Maybe noise. 
-- But overall, fluctations = (0.1, 1e-16)
+- But overall, fluctuations = (0.1, 1e-16)
 - There is no reason to offset the field realizations, so set offset mean and offset std to None.
 - I expect the slope to -4, I let it vary by maybe 1. loglogavgslope = (-4, 1)
 - I expect no deviation from diagonal power law behaviour, so I set asperity to None and then as a consequency flexibility to None
@@ -41,47 +45,65 @@ I don't expect the field to fluctuate much in the y-direction if at all. Maybe n
 args = {
     #"target_subdomain": signal_space,
     #"harmonic_partner": signal_space.get_default_codomain(),
-    "offset_mean" :     None,
+    "offset_mean" :     None, # this has an effect on data realizations (y-Verschiebung)
     "offset_std" :      None,
-    "fluctuations":     (0.1, 1e-16),
-    "loglogavgslope":   (-4,1),
-    "asperity":         None,
-    "flexibility":      None # use this
+    "fluctuations":     (0.1, 1e-16), # this 'bends' the data to a curve at high redshifts
+    "loglogavgslope":   (4,-1), # this has no effect on data realizations
+    "asperity":         None, # this has no effect on data realizations
+    "flexibility":      None # this has no effect on data realizations
 }
 cf_info = str(list(args.values()))
 
 
-# 'signal_cf' is the to be inferred signal field. I'm defining it with exp because my natural signal field is positive definite
+# Ensure positivity of the to be inferred field via exponentiating.
+# Take the logarithm later because nifty interprets ift.log(ift.exp(signal)) = signal without changing the domain
 signal_cf = ift.SimpleCorrelatedField(signal_space, **args)
-
 signal = signal_cf
 
+signal_coordinate_field = Unity(signal_space)
+
 redshift_starts, redshift_ends =  radial_los(n_datapoints)
-redshift_weights = (np.ones(n_datapoints)+redshift_ends)[0]
+redshift_weights = np.ones(n_datapoints)+redshift_ends[0]
+natural_redshifts = np.log(np.ones(n_datapoints)+redshift_ends[0])
+
+# NATURAL REDSHIFTS HAVE TO BE WHAT IS INTEGRATED OVER . SO HERE , x = redshift_ends[0] and z = e^x - 1
 
 
 d_h = 3e8/(68.6e3)*1e6
-noise = .001
+noise = .1
 N = ift.ScalingOperator(data_space, noise, np.float64)
-HT = ift.HarmonicTransformOperator(signal_space.get_default_codomain(),signal_space)
 R = ift.LOSResponse(signal_space, starts=redshift_starts, ends=redshift_ends)
-REDSHIFTS_in = ift.DiagonalOperator(diagonal=ift.Field.from_raw(signal_space,redshift_weights))
-REDSHIFTS_out = ift.DiagonalOperator(diagonal=ift.Field.from_raw(data_space,redshift_weights))
-FIVES = ift.DiagonalOperator(diagonal=ift.Field.from_raw(data_space,5*np.ones(n_datapoints)))
+#REDSHIFTS_in = ift.DiagonalOperator(diagonal=ift.Field.from_raw(signal_space,redshift_weights))
+REDSHIFTS_out = ift.DiagonalOperator(diagonal=ift.Field.from_raw(data_space,np.exp(redshift_ends[0])))
+SUBTRACT_FIVES = ift.Adder(a=-5,domain=ift.DomainTuple.make(data_space,))
 
-signal_response = 5*ift.log(d_h*REDSHIFTS_out(R(REDSHIFTS_in(ift.exp(-1/2*signal)))))
-print("SIgnal response", signal_response)
-#signal_response = integral(ift.exp(-1/2*signal))-ift.DiagonalOperator(ift.Field(domain=ift.DomainTuple.make(signal_space),val=10*np.ones(n_datapoints)))
 
-# Generate mock signal and data
-mock_position = ift.from_random(signal_response.domain, 'normal')
+redshifty_weights_structured = ift.DiagonalOperator(diagonal=ift.Field.from_raw(signal_space,np.exp(signal_coordinate_field.val)))
+#redshifty_weights_unstructured = ift.DiagonalOperator(diagonal=ift.Field.from_raw(signal_data_space,np.exp(signal_coordinate_field.val)))
 
+"""one = redshifty_weights_structured(ift.exp(-1/2*signal))
+two = R(one)
+three = REDSHIFTS_out(two)
+four = SUBTRACT_FIVES(5*np.log10(d_h*three))"""
+
+
+signal_response = SUBTRACT_FIVES(5*np.log10(d_h*REDSHIFTS_out(R(redshifty_weights_structured(ift.exp(-1/2*signal))))))
+
+
+# Generate mock signal and data ensure positivity of synthetic ground truth.
+mock_position = ift.from_random(signal_response.domain, 'normal', mean=10, std=1 )
 data_realization = signal_response(mock_position) + N.draw_sample()
 
-#custom_plot(signal(mock_position).val,False, True, reconstruct=actual_signal_cf(mock_position).val)
+unity = UnityOfDomain(ift.DomainTuple.make(signal_space,))
 
-#print("FOR PLOTTING: signal(mock_pos)" ,signal(mock_position)," R.adjoint times data realiz." ,R.adjoint_times(data_realization), "power spec list ",len(signal_cf.power_spectrum.force(mock_position).val))
 
+
+signal_coordinate_field = Unity(signal_space)
+
+custom_plot(data_realization.val,mode="DrawData", name="Synthetic_data_realization",abszisse=np.exp(redshift_ends[0])-np.ones(n_datapoints))
+
+custom_plot(signal(mock_position).val,mode="GroundTruth",name="TEST NORMAL Synthetic_Data_GroundTruth",abszisse=signal_coordinate_field.val)
+custom_plot(signal_coordinate_field.val,mode="GroundTruth",name="TEST NORMAL UNITY OPERATOR Synthetic_Data_GroundTruth",abszisse=signal_coordinate_field.val)
 
 
 # Plot Setup
@@ -125,11 +147,10 @@ plot.add(list(samples.iterator(signal_cf.power_spectrum)) +
          linewidth=[1.]*nsamples+[3,3],
          label=[None]*nsamples + ["Ground Truth", "Posterior mean"])
 
-#print("FOR CUSTOM ROUTINE: mean",mean, " and std.dev ->",var.sqrt())
+
 path_endresults = "/Users/iason/PycharmProjects/Nifty/CHARM/figures/"
 plot.output(ny=1, nx=3, xsize=24, ysize=6, name=path_groundTruths +'_'+f"{cf_info}_endResult.png")
 
-custom_plot(R.adjoint_times(data_realization).val,True,False,reconstruct=[],cf_info=cf_info)
-custom_plot(signal(mock_position).val,False, True, reconstruct=mean.val,cf_info=cf_info)
+custom_plot(signal(mock_position).val,mode="SyntheticReconstruction",reconstruct=mean.val,name="synthetic_signal_reconstruction",abszisse=signal_coordinate_field.val)
 
 print("saved result as end_result.png")

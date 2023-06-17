@@ -4,9 +4,53 @@ import nifty8 as ift
 import numpy as np
 import matplotlib.pyplot as plt
 
+
+def Unity(signal_domain, return_domain=None):
+    """
+    Returns a field with the domain values of the inputted signal correlated field.
+    Parameters. If return_domain = None, signal_domain is used.
+        ----------
+        signal_domain :class :`~nifty8.domain.Domain` the domain on which the correlated field is defined
+        return_domain :class :`~nifty8.domain.Domain` the domain on which the returned field is defined.
+
+    """
+    size = signal_domain.distances[0]
+    values = []
+    for iteration in range(1, signal_domain.size + 1):
+        values.append(iteration * size)
+    try:
+        if not return_domain:
+            dom = ift.DomainTuple.make(signal_domain,)
+        else:
+            dom = ift.DomainTuple.make(signal_domain,)
+    except:
+        print("Can't make DomainTuple out of return_domain. Assuming unstructured domain.")
+        dom = return_domain
+    return ift.Field(dom, val=np.array(values))
+
+
+
 # ------- Response Operator ------- #
 
 # usage: signal_response = Response(correlated field)
+
+class UnityOfDomain(ift.EndomorphicOperator):
+    # domain: The domain the arguments are returned of in a field.val array
+    def __init__(self, domainTuple):
+        self._domain = domainTuple
+        self._capability = self.TIMES
+
+    def apply(self, x, mode, weight=1):
+        self._check_input(x, mode)
+        underlying_domain = self._domain[0]
+        size = underlying_domain.distances[0]
+        values = []
+        for iteration in range(1,underlying_domain.size+1):
+            values.append(iteration*size)
+        if mode==1:
+            return ift.Field(self._domain, val=np.array(values))
+        else:
+            print("Mode != 1 not implemented in Custom Endomorphic Operator 'UnityOfDomain' ")
 
 class WeightedLOSResponse(ift.LOSResponse):
     def __init__(self, domain, starts, ends, integration_weight=None, sigmas=None, truncation=3.):
