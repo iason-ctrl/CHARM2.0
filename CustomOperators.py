@@ -1,8 +1,85 @@
 import os
-import math
 import nifty8 as ift
 import numpy as np
 import matplotlib.pyplot as plt
+import scipy as sc
+import pandas as pd
+
+d_h = 3e8/(68.6e3)*1e6 # hubble length in parsecs
+
+
+def read_data(keyword="Pantheon+"):
+    if keyword=="Pantheon+":
+        required_fields = ["zCMB", "MU_SH0ES"]
+
+        df = pd.read_csv("Pantheon+SH0ES.csv", sep=" ", skipinitialspace=True, usecols=required_fields)
+        redshifts_real = np.array(df.zCMB)
+        moduli_real = np.array(df.MU_SH0ES)
+        return redshifts_real, moduli_real, []
+    elif keyword=="Union2.1":
+        # open data file
+        f = open("Porqueres_data.txt", "r")
+
+        # read data and sort by redshift
+        z = np.loadtxt("Porqueres_data.txt", usecols=[1], dtype=float)
+        index = np.argsort(z)
+        redshift = z[index]
+        mu = np.loadtxt("Porqueres_data.txt", usecols=[2], dtype=float)[index]
+        errMu = np.loadtxt("Porqueres_data.txt", usecols=[3], dtype=float)[index]
+        f.close()
+
+        # read covariance matrix
+        fCov = open("Porqueres_Cov-syst.txt", "r")
+        Noise = np.loadtxt("Porqueres_Cov-syst.txt", dtype=float)
+        fCov.close()
+        return np.array(redshift), np.array(mu), np.array(Noise)
+
+
+def planck_cosmology(x):
+    # x is natural redshift units
+    return np.log(0.314*np.exp(3*x)+0.686)
+
+def create_data_from_signal(redshifts, mean_values = None, planck=False,n_datapoints=0):
+    """
+        Creates an array containing the distance moduli that given signal_field would create. Uses
+        Simpson integration
+
+            Parameters
+            ----------
+            redshifts :type : np.array , the measured redshifts. Are turned into e^x=1+z weights
+            planck :type : bool , if True data produced py planck cosmology is included in return
+
+            Returns
+            ----------
+            Tuple containing data arrays produced by mean_values and optionally planck cosmology
+
+    """
+
+    redshift_weights = 1 + redshifts # e^x
+    natural_redshifts = np.log(np.ones(n_datapoints) + redshifts) # x = ln(1+z)
+
+    data_produced_by_planck = None
+
+    if planck==True:
+        integrand = redshift_weights * np.exp(
+            -1 / 2 * planck_cosmology(np.linspace(min(natural_redshifts), max(natural_redshifts), n_datapoints)))
+        integral = []
+        for z in redshifts:
+            integral_val = sc.integrate.simpson(y=integrand, x=np.linspace(0, np.log(1 + z), len(integrand)))
+            integral.append(integral_val)
+        integral = np.array(integral)
+        data_produced_by_planck = 5 * np.log10(d_h * integral * redshift_weights) - 5
+
+    integrand = redshift_weights * np.exp(-1 / 2 * mean_values[0:n_datapoints])
+    integral = []
+    for z in redshifts:
+        integral_val = sc.integrate.simpson(y=integrand, x=np.linspace(0, np.log(1 + z), len(integrand)))
+        integral.append(integral_val)
+    integral = np.array(integral)
+
+    data_produced_by_posterior = 5 * np.log10(d_h * integral * redshift_weights) - 5
+
+    return data_produced_by_posterior, data_produced_by_planck
 
 
 def Unity(signal_domain, return_domain=None):

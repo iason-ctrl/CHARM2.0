@@ -2,9 +2,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import matplotlib
-from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
-from matplotlib.patches import Rectangle
-from matplotlib.legend_handler import HandlerLine2D,HandlerErrorbar
+from matplotlib.ticker import AutoMinorLocator
+
+d_h = 3e8/(68.6e3)*1e6 # hubble length in parsecs
 
 palette = sns.color_palette('muted')
 blue, orange, green, red, mauve, brown, pink, gray, yellow, lightblue = palette
@@ -13,84 +13,13 @@ def planck_cosmology(x):
     # x is natural redshift units
     return np.log(0.314*np.exp(3*x)+0.686)
 
-def natural_x_coords_from_redshift(z):
-    return np.log(1+z)
 
-def initial_data_plot(x,y,x_natural):
-    plt.subplot(2, 2, 1)
+def custom_plot(x,mode,name,save=False,show=False,abszisse=None,reconstruct=None, secondYaxis=None, secondXaxis=None, thirdYAxis=None,realData=None,
+                PlanckData = None, ReconstructedData = None, deviation=False, ground_truth=None, thirdXaxis=None):
 
-    plt.plot(x, y, ".", color="black")
-    plt.title(r"Distance moduli $\mu$ against CMB corrected redshifts $z$")
-    plt.xlabel(r"Redshift $z$")
-    plt.ylabel(r"Distance modulus $\mu$")
-
-    plt.subplot(2, 2, 2)
-
-    plt.plot(x_natural, y, ".", color="black")
-    plt.title(r"Distance moduli $\mu$ against CMB corrected redshifts $z$")
-    plt.xlabel(r"Natural coordinates $x=ln(1+z)$")
-    plt.ylabel(r"Distance modulus $\mu$")
-
-    plt.subplot(2, 2, 3)
-
-    plt.plot(x_natural, planck_cosmology(x_natural), "--", color="black")
-    plt.title(r"Planck Cosmology: Evolution of cosmic energy density in time")
-    plt.xlabel(r"Natural coordinates $x=ln(1+z)$ (measure of time)")
-    plt.ylabel(r"Signal Field $s(x)$")
-
-    plt.show()
-
-
-
-def initial_data_plot_only_standard_diagram(x,y,x_natural):
-    font = {'family': 'normal',
-            'weight': 'bold',
-            'size': 15}
-
-    matplotlib.rc('font', **font)
-
-    sns.set_style('darkgrid')  # darkgrid, white grid, dark, white and ticks
-    palette = sns.color_palette('deep')
-
-
-    plt.plot(x_natural, y, ".", color=palette[0])
-    plt.title(r"Distance moduli $\mu$ against CMB corrected redshifts $z$")
-    plt.xlabel(r"Natural coordinates $x=ln(1+z)$")
-    plt.ylabel(r"Distance modulus $\mu$")
-
-
-    plt.show()
-
-
-def plot_histogramms(redshifts,moduli):
-    font = {'family': 'normal',
-            'weight': 'bold',
-            'size': 15}
-
-    matplotlib.rc('font', **font)
-
-    sns.set_style('darkgrid')  # darkgrid, white grid, dark, white and ticks
-    palette = sns.color_palette('deep')
-
-    plt.subplot(2,1,1)
-    plt.hist(redshifts,bins=1701,ec=palette[0],color=palette[0])
-    plt.xlabel("Redshift $z$")
-    plt.ylabel("Frequency")
-    plt.title("Histogram of redshift frequency in the data")
-
-    plt.subplot(2, 1,2)
-    plt.xlabel("Distance modulus $\mu$")
-    plt.ylabel("Frequency")
-    plt.hist(moduli,bins=1701,ec=palette[3],color=palette[3])
-    plt.title("Histogram of distance modulus frequency in the data")
-    plt.subplots_adjust(hspace=0.4)
-    plt.show()
-
-def custom_plot(x,mode,name,abszisse=None,reconstruct=None, secondYaxis=None, secondXaxis=None, thirdYAxis=None,realData=None,
-                PlanckData = None, ReconstructedData = None, deviation=False):
     n_datapoints = 0
     try:
-        n_datapoints = len(realData)
+        n_datapoints = len(realData) if mode=="RealReconstruction" or mode=="DrawData" else len(ReconstructedData)
     except:
         print("Number of datapoints could not have been calculated, input is not array or None.")
 
@@ -107,23 +36,51 @@ def custom_plot(x,mode,name,abszisse=None,reconstruct=None, secondYaxis=None, se
     ax.yaxis.set_minor_locator(AutoMinorLocator())
 
     if mode=="DrawData":
-        plt.plot(abszisse,x, markersize=8, marker="o", color="black", markerfacecolor='white',linewidth=0,label=f"datapoints ({n_datapoints})")
+        plt.plot(abszisse,realData, markersize=8, marker="o", color="black", markerfacecolor='white',linewidth=0,label=f"datapoints ({n_datapoints})")
         #plt.plot(abszisse,x, "-", color="black", linewidth=2)
         plt.xlabel("Redshifts $z$")
         plt.ylabel(r"Distance modulus $\mu$")
         plt.title(r"Real data: Distance moduli $\mu$ against CMB corrected redshifts $z$", size=16)
         plt.legend()
-        fig.set_size_inches(16, 9)
-        plt.savefig("/Users/iason/PycharmProjects/Nifty/CHARM/figures/" +name+".png",dpi=300,bbox_inches='tight')
+        if show:
+            plt.show()
+        if save:
+            fig.set_size_inches(16, 9)
+            plt.savefig("/Users/iason/PycharmProjects/Nifty/CHARM/figures/" +name+".png",dpi=300,bbox_inches='tight')
     elif mode=="SyntheticReconstruction":
-        plt.plot(abszisse,reconstruct, color=blue, linewidth=1.5, ls="--", label="Signal Reconstruction")
-        plt.plot(abszisse,x, color="black",linewidth=1, label="Ground truth")
+        if deviation:
+            plt.subplot(2, 2, 1)
+        plt.errorbar(abszisse, x, yerr=thirdYAxis, color=blue, ecolor=lightblue, elinewidth=1.5, linewidth=3, ls="-",
+                     label="Reconstruction mean (Lightblue: standard deviation)")
+        plt.plot(abszisse, ground_truth, color=red, linewidth=2, ls="--",
+                 label="Ground Truth")
+        plt.plot(thirdXaxis, realData, marker="o", markerfacecolor="white",
+                 color="black", lw=0, label="Real moduli")
+        plt.plot(np.log(np.ones(n_datapoints) + secondXaxis), ReconstructedData, marker="o", markerfacecolor="white",
+                 color=orange, lw=0, label="Reconstructed moduli")
+        plt.plot(np.log(np.ones(n_datapoints) + secondXaxis), PlanckData, marker="o", markerfacecolor="white",
+                 color=blue, lw=0, label="Planck Moduli")
         plt.xlabel("Natural redshift coordinates $x=log(1+z)$")
         plt.ylabel(r"Signal field $s(x):=log(\rho/\rho_0)\propto \rho$")
-        plt.title("Mock signal and Reconstruction", size=16)
+        plt.title("Result of reconstruction", size=16)
         plt.legend()
-        fig.set_size_inches(16, 9)
-        plt.savefig("/Users/iason/PycharmProjects/Nifty/CHARM/figures/" + name+".png",dpi=300,bbox_inches='tight')
+
+        if deviation:
+            plt.subplot(2, 1, 2)
+            plt.plot(abszisse, np.zeros(len(abszisse)), color="black", linewidth=1, ls="--", label="Null line")
+            plt.plot(abszisse, x - ground_truth, color=mauve, linewidth=1, ls="-", label="Deviation")
+            plt.xlabel("Natural redshift coordinates $x=log(1+z)$")
+            plt.ylabel(r"$\Delta s(x)$")
+            plt.title("Deviation of reconstruction from ground truth", size=16)
+
+            plt.subplots_adjust(hspace=0.4)
+
+        if show:
+            plt.show()
+        if save:
+            fig.set_size_inches(16, 9)
+            plt.savefig("/Users/iason/PycharmProjects/Nifty/CHARM/figures/" + name + ".png", dpi=300,
+                        bbox_inches='tight')
     elif mode=="GroundTruth":
         plt.plot(abszisse, x, "-", color="black", linewidth=2, label="Signal")
         plt.xlabel("Natural redshift coordinates $x=log(1+z)$")
@@ -162,7 +119,6 @@ def custom_plot(x,mode,name,abszisse=None,reconstruct=None, secondYaxis=None, se
         if deviation:
             plt.subplot(2, 2, 1)
         plt.errorbar(abszisse, x, yerr=thirdYAxis,color=blue,ecolor=lightblue,elinewidth=1.5, linewidth=3,ls="-", label="Reconstruction mean (Lightblue: standard deviation)")
-        #plt.plot(np.linspace(0,5,300),np.cos(planck_cosmology(np.linspace(0,5,300))),color=red,linewidth=2,ls="-",label="Cosine of planck cosmology")
         plt.plot(np.linspace(0, 5, 300), planck_cosmology(np.linspace(0, 5, 300)), color=red, linewidth=2,ls="--", label="Planck cosmology")
         plt.plot(np.log(np.ones(n_datapoints)+secondXaxis), realData, marker="o", markerfacecolor="white", color="black", lw=0, label="Real moduli")
         plt.plot(np.log(np.ones(n_datapoints) + secondXaxis), ReconstructedData, marker="o", markerfacecolor="white",color=orange, lw=0, label="Reconstructed moduli")
@@ -182,24 +138,13 @@ def custom_plot(x,mode,name,abszisse=None,reconstruct=None, secondYaxis=None, se
 
             plt.subplots_adjust(hspace=0.4)
 
-        plt.show()
-        #fig.set_size_inches(16, 9)
-        #plt.savefig("/Users/iason/PycharmProjects/Nifty/CHARM/figures/" + name+".png",dpi=300,bbox_inches='tight')
+        if show:
+            plt.show()
+        if save:
+            fig.set_size_inches(16, 9)
+            plt.savefig("/Users/iason/PycharmProjects/Nifty/CHARM/figures/" + name+".png",dpi=300,bbox_inches='tight')
 
-        """plt.clf()
-        plt.plot(secondXaxis, secondYaxis, color=orange, label="Data produced by posterior",markersize=8, marker="o", markerfacecolor='white', linewidth=0,)
-        plt.plot(secondXaxis, thirdYAxis, color=blue, label="Data produced by planck curve", markersize=8, marker="o",
-                 markerfacecolor='white', linewidth=0, )
-        plt.plot(secondXaxis, realData, color="black", label="Real data", markersize=8, marker="o",
-                 markerfacecolor='white', linewidth=0, )
-        plt.xlabel("Redshifts $z$")
-        plt.ylabel(r"Distance modulus $\mu$")
-        plt.title("Data resulting from the posterior mean, planck cosmology and real data")
-        plt.legend()
-        fig.set_size_inches(16, 9)
-        plt.savefig("/Users/iason/PycharmProjects/Nifty/CHARM/figures/" + name + "dataRealization.png", dpi=300, bbox_inches='tight')
 
-"""
 
 def visualize_power_spectrum_parameters():
 
@@ -239,5 +184,7 @@ def visualize_power_spectrum_parameters():
     ax.set_yscale('log')
     fig.set_size_inches(16, 9)
     plt.savefig('/Users/iason/Downloads/Influence of exponent on power spectrum on log log scale.png', dpi=300,bbox_inches='tight')
+
+
 
 
